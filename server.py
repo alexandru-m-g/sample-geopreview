@@ -19,7 +19,7 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_proxy_request(proxy_url)
         else:
             super().do_GET()
-    
+
     def handle_proxy_request(self, proxy_url):
         try:
             with urllib.request.urlopen(proxy_url) as response:
