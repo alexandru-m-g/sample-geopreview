@@ -20,25 +20,23 @@
   };
 
   var defaultStyle = {
-    type: 'fill',
-    paint: {
-      'fill-color': 'hsl(4, 100%, 62%)',
-      'fill-opacity': 0.6,
-      'fill-outline-color': 'hsl(4, 100%, 31%)',
-    },
+    weight: 1,
+    fill: true,
+    fillColor: 'rgb(255, 73, 61)',
+    fillOpacity: 0.6,
+    color: 'rgb(255, 73, 61)',
   };
   var defaultLineStyle = {
-    type: 'line',
-    paint: {
-      'line-color': 'hsl(4, 100%, 62%)',
-    },
+    color: 'rgb(255, 73, 61)',
+    weight: 3,
   };
   var defaultPointStyle = {
-    type: 'circle',
-    paint: {
-      'circle-color': 'hsl(4, 100%, 62%)',
-      'circle-opacity': 0.6,
-    },
+    weight: 0,
+    color: 'rgb(255, 73, 61)',
+    radius: 8,
+    fill: true,
+    fillColor: 'rgb(255, 73, 61)',
+    fillOpacity: 0.6,
   };
 
   function layerStyling(properties, zoom, geometryDimension) {
@@ -59,12 +57,6 @@
     }
   }
 
-  function getLayerStyling(geomType) {
-    if ([1, 'Point', 'MultiPoint'].includes(geomType)) return defaultPointStyle;
-    else if ([2, 'LineString', 'MultiLineString'].includes(geomType)) return defaultLineStyle;
-    else return defaultStyle;
-  }
-
   function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
     var ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
 
@@ -76,22 +68,11 @@
     var xmax = bboxArray[1].split(' ')[0];
     var ymax = bboxArray[1].split(' ')[1];
     var bounds = [
-      [xmin, ymin],
-      [xmax, ymax],
+      [ymin, xmin],
+      [ymax, xmax],
     ];
 
     function createLayer(extraFields) {
-      options.map.addSource('overlay', {
-        type: 'vector',
-        tiles: [location.origin + value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields],
-      });
-      options.map.addLayer({
-        id: 'overlay',
-        source: 'overlay',
-        'source-layer': layerData.layer_id,
-        ...getLayerStyling(layerData.layer_geom_type),
-      });
-
       var mvtSource = L.vectorGrid.protobuf(
         // value + "?geom_column=wkb_geometry&id_column=ogc_fid&columns=ogc_fid" + extraFields, //dirt-simple-postgis
         value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields, // postile
@@ -140,7 +121,7 @@
       };
       if (!firstAdded) {
         mvtSource.myFitBounds();
-        // options.map.addLayer(mvtSource);
+        options.map.addLayer(mvtSource);
         firstAdded = true;
       }
 
@@ -200,44 +181,44 @@
      * List of shape info for each geopreviewable resource
      * @type {[{resource_name: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
      */
-    // var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
+    var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
     var data = JSON.parse($('#shapeData').text());
     var layers = [];
 
-    var info;
+    var info = L.control({ position: 'topleft' });
 
-    // info.onAdd = function (map) {
-    //   this._div = L.DomUtil.create("div", "map-info"); // create a div with a class "info"
-    //   return this._div;
-    // };
+    info.onAdd = function (map) {
+      this._div = L.DomUtil.create('div', 'map-info'); // create a div with a class "info"
+      return this._div;
+    };
 
-    // // method that we will use to update the control based on feature properties passed
-    // info.update = function (props) {
-    //   var innerData = "";
-    //   if (props) {
-    //     for (var key in props) {
-    //       if (!NOT_ALLOWED_PROPERTIES.includes(key)) {
-    //         var value = props[key];
-    //         innerData +=
-    //           '<tr><td style="text-align: right;">' +
-    //           key +
-    //           "</td><td>&nbsp;&nbsp; <b>" +
-    //           value +
-    //           "</b><td></tr>";
-    //       }
-    //     }
-    //   }
-    //   this._div.innerHTML =
-    //     "<h4>" +
-    //     "Shape info" +
-    //     "</h4>" +
-    //     (props ? "<table>" + innerData + "</table>" : "Click on a shape");
-    // };
-    // info.showOtherMessage = function (message) {
-    //   this._div.innerHTML = message;
-    // };
-    // info.addTo(options.map);
-    // info.update();
+    // method that we will use to update the control based on feature properties passed
+    info.update = function (props) {
+      var innerData = '';
+      if (props) {
+        for (var key in props) {
+          if (!NOT_ALLOWED_PROPERTIES.includes(key)) {
+            var value = props[key];
+            innerData +=
+              '<tr><td style="text-align: right;">' +
+              key +
+              '</td><td>&nbsp;&nbsp; <b>' +
+              value +
+              '</b><td></tr>';
+          }
+        }
+      }
+      this._div.innerHTML =
+        '<h4>' +
+        'Shape info' +
+        '</h4>' +
+        (props ? '<table>' + innerData + '</table>' : 'Click on a shape');
+    };
+    info.showOtherMessage = function (message) {
+      this._div.innerHTML = message;
+    };
+    info.addTo(options.map);
+    info.update();
 
     var promises = [];
     var firstAdded = false;
@@ -256,47 +237,23 @@
       if (promise) promises.push(promise);
     }
 
-    // $.when.apply($, promises).done(function (sources) {
-    //   L.control.layers([], layers).addTo(options.map);
-    //   options.map.on("overlayadd", function (e) {
-    //     e.layer.myFitBounds();
-    //   });
-    // });
-
-    // $(".map-info").mousedown(function (event) {
-    //   event.stopPropagation();
-    // });
-  }
-
-  function initMap() {
-    let map = options.map;
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
-    // map.scrollZoom.disable();
-    map.dragRotate.disable();
-    map.keyboard.disable();
-    map.touchZoomRotate.disableRotation();
-    map.addSource('base-layer', {
-      type: 'raster',
-      attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>',
-      tiles: [$('#mapbox-baselayer-url-div').text()],
-      minzoom: 0,
-      maxzoom: 12,
-      tileSize: 256,
+    $.when.apply($, promises).done(function (sources) {
+      L.control.layers([], layers).addTo(options.map);
+      options.map.on('overlayadd', function (e) {
+        e.layer.myFitBounds();
+      });
     });
-    map.addLayer({
-      id: 'base-layer',
-      source: 'base-layer',
-      type: 'raster',
+
+    $('.map-info').mousedown(function (event) {
+      event.stopPropagation();
     });
-    getData(options);
   }
 
   function buildMap(options) {
-    options.map = new maplibregl.Map({
-      container: 'map',
-      attributionControl: false,
-    });
-    initMap();
+    let map = L.map('map', { attributionControl: false });
+    setHDXBaseMap(map, 16);
+    options.map = map;
+    getData(options);
   }
 
   $(document).ready(function () {

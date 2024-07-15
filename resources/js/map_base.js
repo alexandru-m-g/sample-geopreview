@@ -4,14 +4,13 @@ function setHDXBaseMap(map, maxZoomValue) {
   getHDXBaseLayer(map, maxZoomValue);
   // getHDXLabelsLayer(map, maxZoomValue);
 
-  L.control.attribution({ position: "topright" }).addTo(map);
+  L.control.attribution({ position: 'topright' }).addTo(map);
   map.setView([0, 0], 1);
 }
 
 function getHDXBaseLayer(map, maxZoomValue) {
-  return L.tileLayer($("#mapbox-baselayer-url-div").text(), {
-    attribution:
-      '<a href="http://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>',
+  return L.tileLayer($('#mapbox-baselayer-url-div').text(), {
+    attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>',
     minZoom: 0,
     maxZoom: maxZoomValue,
   }).addTo(map);
