@@ -74,17 +74,13 @@
 
     function createLayer(extraFields) {
       var mvtSource = L.vectorGrid.protobuf(
-        // value + "?geom_column=wkb_geometry&id_column=ogc_fid&columns=ogc_fid" + extraFields, //dirt-simple-postgis
         value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields, // postile
-        // url: value + "?fields=ogc_fid" + extraFields,
-        //debug: true,
         {
           interactive: true,
           getFeatureId: function (feature) {
             return feature.properties.ogc_fid;
           },
           vectorTileLayerStyles: {
-            // A plain set of L.Path options.
             [layerData.layer_id]: layerStyling, // for newer vector tiles servers
             PROJ_LIB: layerStyling, // for the old GISAPI server
           },

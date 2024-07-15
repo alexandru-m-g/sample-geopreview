@@ -1,4 +1,7 @@
 (function () {
+  var ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
+  var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
+
   var options = {
     pcode: null,
     value: null,
@@ -23,13 +26,15 @@
     type: 'fill',
     paint: {
       'fill-color': 'hsl(4, 100%, 62%)',
-      'fill-opacity': 0.6,
+      'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.8, 0.6],
       'fill-outline-color': 'hsl(4, 100%, 31%)',
     },
   };
   var defaultLineStyle = {
     type: 'line',
     paint: {
+      'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 3],
+      'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.8, 0.6],
       'line-color': 'hsl(4, 100%, 62%)',
     },
   };
@@ -37,25 +42,46 @@
     type: 'circle',
     paint: {
       'circle-color': 'hsl(4, 100%, 62%)',
-      'circle-opacity': 0.6,
+      'circle-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.8, 0.6],
+      'circle-radius': ['case', ['boolean', ['feature-state', 'hover'], false], 11, 8],
     },
   };
 
-  function layerStyling(properties, zoom, geometryDimension) {
-    if (!properties.__geometryDimension) {
-      properties.__geometryDimension = geometryDimension;
-    } else if (!geometryDimension) {
-      geometryDimension = properties.__geometryDimension;
+  class CustomControl {
+    onAdd(map) {
+      this._map = map;
+      this._container = document.createElement('div');
+      this._container.className = 'map-info maplibregl-ctrl';
+      this._container.textContent = 'Hello, world';
+      return this._container;
     }
-    if (geometryDimension === 1) {
-      // point
-      return defaultPointStyle;
-    } else if (geometryDimension === 2) {
-      // line
-      return defaultLineStyle;
-    } else {
-      // polygon
-      return defaultStyle;
+    onRemove() {
+      this._container.parentNode.removeChild(this._container);
+      this._map = undefined;
+    }
+    update(props) {
+      var innerData = '';
+      if (props) {
+        for (var key in props) {
+          if (!NOT_ALLOWED_PROPERTIES.includes(key)) {
+            var value = props[key];
+            innerData +=
+              '<tr><td style="text-align: right;">' +
+              key +
+              '</td><td>&nbsp;&nbsp; <b>' +
+              value +
+              '</b><td></tr>';
+          }
+        }
+      }
+      this._container.innerHTML =
+        '<h4>' +
+        'Shape info' +
+        '</h4>' +
+        (props ? '<table>' + innerData + '</table>' : 'Click on a shape');
+    }
+    showOtherMessage(message) {
+      this._container.innerHTML = message;
     }
   }
 
@@ -66,8 +92,6 @@
   }
 
   function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
-    var ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
-
     var value = layerData.url;
 
     var bboxArray = layerData.bounding_box.replace('BOX(', '').replace(')', '').split(',');
@@ -81,70 +105,57 @@
     ];
 
     function createLayer(extraFields) {
-      options.map.addSource('overlay', {
+      let map = options.map;
+      map.addSource(layerData.layer_id, {
         type: 'vector',
+        promoteId: 'ogc_fid',
         tiles: [location.origin + value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields],
       });
-      options.map.addLayer({
-        id: 'overlay',
-        source: 'overlay',
+      map.addLayer({
+        id: layerData.layer_id,
+        source: layerData.layer_id,
         'source-layer': layerData.layer_id,
         ...getLayerStyling(layerData.layer_geom_type),
       });
 
-      var mvtSource = L.vectorGrid.protobuf(
-        // value + "?geom_column=wkb_geometry&id_column=ogc_fid&columns=ogc_fid" + extraFields, //dirt-simple-postgis
-        value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields, // postile
-        // url: value + "?fields=ogc_fid" + extraFields,
-        //debug: true,
-        {
-          interactive: true,
-          getFeatureId: function (feature) {
-            return feature.properties.ogc_fid;
-          },
-          vectorTileLayerStyles: {
-            // A plain set of L.Path options.
-            [layerData.layer_id]: layerStyling, // for newer vector tiles servers
-            PROJ_LIB: layerStyling, // for the old GISAPI server
-          },
-          layerLink: function (layerName) {
-            if (layerName.indexOf('_label') > -1) {
-              return layerName.replace('_label', '');
-            }
-            return layerName + '_label';
-          },
+      let featureId;
+
+      function onMouseMove(e) {
+        if (e.features.length > 0) {
+          map.getCanvas().style.cursor = 'pointer';
+          if (featureId) {
+            map.setFeatureState(
+              { source: layerData.layer_id, sourceLayer: layerData.layer_id, id: featureId },
+              { hover: false }
+            );
+          }
+          featureId = e.features[0].id;
+          info.update(e.features[0].properties);
+          map.setFeatureState(
+            { source: layerData.layer_id, sourceLayer: layerData.layer_id, id: featureId },
+            { hover: true }
+          );
         }
-      );
-      mvtSource.on('mouseover', function (event) {
-        if (event.layer && event.layer.properties) {
-          var layer = event.layer;
-          var featureId = layer.properties.ogc_fid;
-          mvtSource.setFeatureStyle(featureId, {
-            weight: layer.options.weight + 3,
-            color: layer.options.color,
-            fillColor: layer.options.fillColor,
-            fillOpacity: 0.8,
-            fill: layer.options.fill,
-          });
-          info.update(event.layer.properties);
-        }
-      });
-      mvtSource.on('mouseout', function (event) {
-        if (event.layer && event.layer.properties) {
-          var featureId = event.layer.properties.ogc_fid;
-          mvtSource.resetFeatureStyle(featureId);
-        }
-      });
-      mvtSource.myFitBounds = function () {
-        options.map.fitBounds(bounds);
-      };
-      if (!firstAdded) {
-        mvtSource.myFitBounds();
-        // options.map.addLayer(mvtSource);
-        firstAdded = true;
       }
 
-      layers[layerData.resource_name] = mvtSource;
+      function onMouseLeave() {
+        if (featureId) {
+          map.getCanvas().style.cursor = '';
+          map.setFeatureState(
+            { source: layerData.layer_id, sourceLayer: layerData.layer_id, id: featureId },
+            { hover: false }
+          );
+        }
+        featureId = undefined;
+        info.update();
+      }
+      map.on('mousemove', layerData.layer_id, onMouseMove);
+      map.on('mouseleave', layerData.layer_id, onMouseLeave);
+
+      if (!firstAdded) {
+        options.map.fitBounds(bounds);
+        firstAdded = true;
+      }
     }
 
     var promise = null;
@@ -200,44 +211,12 @@
      * List of shape info for each geopreviewable resource
      * @type {[{resource_name: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
      */
-    // var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
     var data = JSON.parse($('#shapeData').text());
     var layers = [];
 
-    var info;
-
-    // info.onAdd = function (map) {
-    //   this._div = L.DomUtil.create("div", "map-info"); // create a div with a class "info"
-    //   return this._div;
-    // };
-
-    // // method that we will use to update the control based on feature properties passed
-    // info.update = function (props) {
-    //   var innerData = "";
-    //   if (props) {
-    //     for (var key in props) {
-    //       if (!NOT_ALLOWED_PROPERTIES.includes(key)) {
-    //         var value = props[key];
-    //         innerData +=
-    //           '<tr><td style="text-align: right;">' +
-    //           key +
-    //           "</td><td>&nbsp;&nbsp; <b>" +
-    //           value +
-    //           "</b><td></tr>";
-    //       }
-    //     }
-    //   }
-    //   this._div.innerHTML =
-    //     "<h4>" +
-    //     "Shape info" +
-    //     "</h4>" +
-    //     (props ? "<table>" + innerData + "</table>" : "Click on a shape");
-    // };
-    // info.showOtherMessage = function (message) {
-    //   this._div.innerHTML = message;
-    // };
-    // info.addTo(options.map);
-    // info.update();
+    var info = new CustomControl();
+    options.map.addControl(info, 'top-left');
+    info.update();
 
     var promises = [];
     var firstAdded = false;
@@ -263,19 +242,20 @@
     //   });
     // });
 
-    // $(".map-info").mousedown(function (event) {
-    //   event.stopPropagation();
-    // });
+    $('.map-info').mousedown(function (event) {
+      event.stopPropagation();
+    });
   }
 
   function initMap() {
     let map = options.map;
+    map.addControl(new maplibregl.AttributionControl({}), 'top-right');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
-    // map.scrollZoom.disable();
+    map.scrollZoom.disable();
     map.dragRotate.disable();
     map.keyboard.disable();
     map.touchZoomRotate.disableRotation();
-    map.addSource('base-layer', {
+    map.addSource('baselayer', {
       type: 'raster',
       attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>',
       tiles: [$('#mapbox-baselayer-url-div').text()],
@@ -284,8 +264,8 @@
       tileSize: 256,
     });
     map.addLayer({
-      id: 'base-layer',
-      source: 'base-layer',
+      id: 'baselayer',
+      source: 'baselayer',
       type: 'raster',
     });
     getData(options);
