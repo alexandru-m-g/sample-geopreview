@@ -152,10 +152,10 @@
 
   function getBounds(BBOX) {
     var bboxArray = BBOX.replace('BOX(', '').replace(')', '').split(',');
-    var xmin = bboxArray[0].split(' ')[0];
-    var ymin = bboxArray[0].split(' ')[1];
-    var xmax = bboxArray[1].split(' ')[0];
-    var ymax = bboxArray[1].split(' ')[1];
+    var xmin = Number(bboxArray[0].split(' ')[0]);
+    var ymin = Number(bboxArray[0].split(' ')[1]);
+    var xmax = Number(bboxArray[1].split(' ')[0]);
+    var ymax = Number(bboxArray[1].split(' ')[1]);
     var bounds = [
       [xmin, ymin],
       [xmax, ymax],
@@ -218,7 +218,7 @@
       map.on('mousemove', layerData.layer_id, onMouseMove);
       map.on('mouseleave', layerData.layer_id, onMouseLeave);
 
-      if (firstAdded) options.map.fitBounds(bounds);
+      if (firstAdded) options.map.fitBounds(bounds, { animate: false });
     }
 
     var promise = null;
