@@ -2,6 +2,8 @@
   var ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
   var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
 
+  let info;
+
   var options = {
     pcode: null,
     value: null,
@@ -47,7 +49,7 @@
     },
   };
 
-  class CustomControl {
+  class InfoControl {
     onAdd(map) {
       this._map = map;
       this._container = document.createElement('div');
@@ -85,16 +87,68 @@
     }
   }
 
+  class LayersControl {
+    constructor(ctrls) {
+      this._container = document.createElement('div');
+      this._container.classList.add('maplibregl-ctrl', 'maplibregl-ctrl-group');
+      this._container.style.display = 'block';
+      this._container.style.padding = '0.2em';
+      this._ctrls = ctrls;
+      this._inputs = [];
+      for (const [key, [value, bounds]] of Object.entries(this._ctrls)) {
+        let labeled_checkbox = this._createLabeledCheckbox(key, value, bounds);
+        this._container.appendChild(labeled_checkbox);
+      }
+    }
+
+    _createLabeledCheckbox(key, value, bounds) {
+      let label = document.createElement('label');
+      label.style.display = 'block';
+      label.style.padding = '0.2em';
+      let text = document.createTextNode(key);
+      let input = document.createElement('input');
+      this._inputs.push(input);
+      input.type = 'checkbox';
+      input.id = key;
+      input.value = value;
+      input.bounds = bounds;
+      input.style.marginRight = '0.4em';
+      input.addEventListener('change', (e) => {
+        let layer = e.target.value;
+        let visibility = e.target.checked ? 'visible' : 'none';
+        this._map.setLayoutProperty(layer, 'visibility', visibility);
+        if (e.target.checked) this._map.fitBounds(e.target.bounds);
+      });
+      label.appendChild(input);
+      label.appendChild(text);
+      return label;
+    }
+
+    onAdd(map) {
+      this._map = map;
+      for (const input of this._inputs) {
+        let layername = this._ctrls[input.id][0];
+        let isVisible = true;
+        isVisible = isVisible && this._map.getLayoutProperty(layername, 'visibility') !== 'none';
+        input.checked = isVisible;
+      }
+      return this._container;
+    }
+
+    onRemove(map) {
+      this._container.parentNode.removeChild(this._container);
+      this._map = undefined;
+    }
+  }
+
   function getLayerStyling(geomType) {
     if ([1, 'Point', 'MultiPoint'].includes(geomType)) return defaultPointStyle;
     else if ([2, 'LineString', 'MultiLineString'].includes(geomType)) return defaultLineStyle;
     else return defaultStyle;
   }
 
-  function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
-    var value = layerData.url;
-
-    var bboxArray = layerData.bounding_box.replace('BOX(', '').replace(')', '').split(',');
+  function getBounds(BBOX) {
+    var bboxArray = BBOX.replace('BOX(', '').replace(')', '').split(',');
     var xmin = bboxArray[0].split(' ')[0];
     var ymin = bboxArray[0].split(' ')[1];
     var xmax = bboxArray[1].split(' ')[0];
@@ -103,6 +157,12 @@
       [xmin, ymin],
       [xmax, ymax],
     ];
+    return bounds;
+  }
+
+  function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
+    var value = layerData.url;
+    var bounds = getBounds(layerData.bounding_box);
 
     function createLayer(extraFields) {
       let map = options.map;
@@ -117,6 +177,8 @@
         'source-layer': layerData.layer_id,
         ...getLayerStyling(layerData.layer_geom_type),
       });
+      let visibility = firstAdded ? 'visible' : 'none';
+      map.setLayoutProperty(layerData.layer_id, 'visibility', visibility);
 
       let featureId;
 
@@ -149,13 +211,11 @@
         featureId = undefined;
         info.update();
       }
+
       map.on('mousemove', layerData.layer_id, onMouseMove);
       map.on('mouseleave', layerData.layer_id, onMouseLeave);
 
-      if (!firstAdded) {
-        options.map.fitBounds(bounds);
-        firstAdded = true;
-      }
+      if (firstAdded) options.map.fitBounds(bounds);
     }
 
     var promise = null;
@@ -214,12 +274,12 @@
     var data = JSON.parse($('#shapeData').text());
     var layers = [];
 
-    var info = new CustomControl();
+    info = new InfoControl();
     options.map.addControl(info, 'top-left');
     info.update();
 
     var promises = [];
-    var firstAdded = false;
+    var firstAdded = true;
     for (var idx = 0; idx < data.length; idx++) {
       var promise = getFieldListAndBuildLayer(
         data[idx],
@@ -229,18 +289,19 @@
         layers,
         data[idx].resource_name
       );
-      if (!firstAdded) {
-        firstAdded = true;
+      if (firstAdded) {
+        firstAdded = false;
       }
       if (promise) promises.push(promise);
     }
 
-    // $.when.apply($, promises).done(function (sources) {
-    //   L.control.layers([], layers).addTo(options.map);
-    //   options.map.on("overlayadd", function (e) {
-    //     e.layer.myFitBounds();
-    //   });
-    // });
+    $.when.apply($, promises).done(() => {
+      layerConfig = {};
+      for (let row of data) {
+        layerConfig[row.resource_name] = [row.layer_id, getBounds(row.bounding_box)];
+      }
+      options.map.addControl(new LayersControl(layerConfig), 'top-right');
+    });
 
     $('.map-info').mousedown(function (event) {
       event.stopPropagation();
@@ -275,8 +336,13 @@
     options.map = new maplibregl.Map({
       container: 'map',
       attributionControl: false,
+      style: {
+        version: 8,
+        sources: {},
+        layers: [],
+      },
     });
-    initMap();
+    options.map.once('load', initMap);
   }
 
   $(document).ready(function () {
