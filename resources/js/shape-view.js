@@ -90,21 +90,25 @@
   class LayersControl {
     constructor(ctrls) {
       this._container = document.createElement('div');
-      this._container.classList.add('maplibregl-ctrl', 'maplibregl-ctrl-group');
-      this._container.style.display = 'block';
-      this._container.style.padding = '0.2em';
+      this._container.classList.add('maplibregl-ctrl', 'maplibregl-ctrl-group', 'layers-control');
       this._ctrls = ctrls;
       this._inputs = [];
+      let hover = document.createElement('a');
+      hover.classList.add('layers-control-toggle');
+      hover.href = '#';
+      let list = document.createElement('div');
+      list.classList.add('layers-control-list');
+      this._container.appendChild(hover);
+      this._container.appendChild(list);
       for (const [key, [value, bounds]] of Object.entries(this._ctrls)) {
         let labeled_checkbox = this._createLabeledCheckbox(key, value, bounds);
-        this._container.appendChild(labeled_checkbox);
+        list.appendChild(labeled_checkbox);
       }
     }
 
     _createLabeledCheckbox(key, value, bounds) {
       let label = document.createElement('label');
-      label.style.display = 'block';
-      label.style.padding = '0.2em';
+      label.classList.add('layer-control');
       let text = document.createTextNode(key);
       let input = document.createElement('input');
       this._inputs.push(input);
@@ -112,7 +116,6 @@
       input.id = key;
       input.value = value;
       input.bounds = bounds;
-      input.style.marginRight = '0.4em';
       input.addEventListener('change', (e) => {
         let layer = e.target.value;
         let visibility = e.target.checked ? 'visible' : 'none';
