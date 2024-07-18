@@ -6,7 +6,8 @@ from socketserver import ThreadingMixIn
 PORT = 9000
 BASE_TILES_PROXY_PATH = "/mapbox-base-tiles/"
 VECTOR_TILES_PROXY_PATH = "/gis/"
-TARGET_SERVER = "data.humdata.org"
+TARGET_SERVER = "feature.data-humdata-org.ahconu.org"
+
 
 class ThreadingSimpleServer(ThreadingMixIn, http.server.HTTPServer):
     pass
