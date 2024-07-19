@@ -176,10 +176,10 @@
     const bounds = getBounds(layerData.bounding_box);
     const res = await fetch(`/gis/layer-type/${layerData.layer_id}`);
     let geomType;
-    try {
-      const result = await res.json();
-      geomType = result.result;
-    } catch {
+    if (res.ok) {
+      const resJSON = await res.json();
+      geomType = resJSON.result;
+    } else {
       const tile0 = tilesURL.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0');
       const r = await fetch(tile0);
       const buffer = await r.arrayBuffer();
