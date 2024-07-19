@@ -1,10 +1,10 @@
 (function () {
-  var ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
-  var NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
+  const ALLOWED_COLUMN_TYPES = ['character constying', 'integer', 'numeric'];
+  const NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
 
   let info;
 
-  var options = {
+  const options = {
     pcode: null,
     value: null,
     pcodeSelectorId: '#pcode',
@@ -24,7 +24,7 @@
     pcodeMap: {},
   };
 
-  var defaultStyle = {
+  const defaultStyle = {
     type: 'fill',
     paint: {
       'fill-color': 'hsl(4, 100%, 62%)',
@@ -32,7 +32,7 @@
       'fill-outline-color': 'hsl(4, 100%, 31%)',
     },
   };
-  var defaultLineStyle = {
+  const defaultLineStyle = {
     type: 'line',
     paint: {
       'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 6, 3],
@@ -40,7 +40,7 @@
       'line-color': 'hsl(4, 100%, 62%)',
     },
   };
-  var defaultPointStyle = {
+  const defaultPointStyle = {
     type: 'circle',
     paint: {
       'circle-color': 'hsl(4, 100%, 62%)',
@@ -62,11 +62,11 @@
       this._map = undefined;
     }
     update(props) {
-      var innerData = '';
+      let innerData = '';
       if (props) {
-        for (var key in props) {
+        for (const key in props) {
           if (!NOT_ALLOWED_PROPERTIES.includes(key)) {
-            var value = props[key];
+            const value = props[key];
             innerData +=
               '<tr><td style="text-align: right;">' +
               key +
@@ -93,32 +93,32 @@
       this._container.classList.add('maplibregl-ctrl', 'maplibregl-ctrl-group', 'layers-control');
       this._ctrls = ctrls;
       this._inputs = [];
-      let hover = document.createElement('a');
+      const hover = document.createElement('a');
       hover.classList.add('layers-control-toggle');
       hover.href = '#';
-      let list = document.createElement('div');
+      const list = document.createElement('div');
       list.classList.add('layers-control-list');
       this._container.appendChild(hover);
       this._container.appendChild(list);
       for (const [key, [value, bounds]] of Object.entries(this._ctrls)) {
-        let labeled_checkbox = this._createLabeledCheckbox(key, value, bounds);
+        const labeled_checkbox = this._createLabeledCheckbox(key, value, bounds);
         list.appendChild(labeled_checkbox);
       }
     }
 
     _createLabeledCheckbox(key, value, bounds) {
-      let label = document.createElement('label');
+      const label = document.createElement('label');
       label.classList.add('layer-control');
-      let text = document.createTextNode(key);
-      let input = document.createElement('input');
+      const text = document.createTextNode(key);
+      const input = document.createElement('input');
       this._inputs.push(input);
       input.type = 'checkbox';
       input.id = key;
       input.value = value;
       input.bounds = bounds;
       input.addEventListener('change', (e) => {
-        let layer = e.target.value;
-        let visibility = e.target.checked ? 'visible' : 'none';
+        const layer = e.target.value;
+        const visibility = e.target.checked ? 'visible' : 'none';
         this._map.setLayoutProperty(layer, 'visibility', visibility);
         if (e.target.checked) this._map.fitBounds(e.target.bounds);
       });
@@ -130,7 +130,7 @@
     onAdd(map) {
       this._map = map;
       for (const input of this._inputs) {
-        let layername = this._ctrls[input.id][0];
+        const layername = this._ctrls[input.id][0];
         let isVisible = true;
         isVisible = isVisible && this._map.getLayoutProperty(layername, 'visibility') !== 'none';
         input.checked = isVisible;
@@ -145,42 +145,64 @@
   }
 
   function getLayerStyling(geomType) {
-    if ([1, 'Point', 'MultiPoint'].includes(geomType)) return defaultPointStyle;
-    else if ([2, 'LineString', 'MultiLineString'].includes(geomType)) return defaultLineStyle;
-    else return defaultStyle;
+    const geomTypeUpper = geomType.toUpperCase();
+    if (['POINT', 'MULTIPOINT', 'ST_POINT', 'ST_MULTIPOINT'].includes(geomTypeUpper)) {
+      return defaultPointStyle;
+    } else if (
+      ['LINESTRING', 'MULTILINESTRING', 'ST_LINESTRING', 'ST_MULTILINESTRING'].includes(
+        geomTypeUpper
+      )
+    ) {
+      return defaultLineStyle;
+    } else return defaultStyle;
   }
 
   function getBounds(BBOX) {
-    var bboxArray = BBOX.replace('BOX(', '').replace(')', '').split(',');
-    var xmin = Number(bboxArray[0].split(' ')[0]);
-    var ymin = Number(bboxArray[0].split(' ')[1]);
-    var xmax = Number(bboxArray[1].split(' ')[0]);
-    var ymax = Number(bboxArray[1].split(' ')[1]);
-    var bounds = [
+    const bboxArray = BBOX.replace('BOX(', '').replace(')', '').split(',');
+    const xmin = Number(bboxArray[0].split(' ')[0]);
+    const ymin = Number(bboxArray[0].split(' ')[1]);
+    const xmax = Number(bboxArray[1].split(' ')[0]);
+    const ymax = Number(bboxArray[1].split(' ')[1]);
+    const bounds = [
       [xmin, ymin],
       [xmax, ymax],
     ];
     return bounds;
   }
 
-  function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
-    var value = layerData.url;
-    var bounds = getBounds(layerData.bounding_box);
+  async function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
+    const value = layerData.url;
+    const tilesURL = location.origin + value + '?geom=wkb_geometry&fields=ogc_fid';
+    const bounds = getBounds(layerData.bounding_box);
+    const res = await fetch(`/gis/layer-type/${layerData.layer_id}`);
+    let geomType;
+    try {
+      const result = await res.json();
+      geomType = result.result;
+    } catch {
+      const tile0 = tilesURL.replace('{z}', '0').replace('{x}', '0').replace('{y}', '0');
+      const r = await fetch(tile0);
+      const buffer = await r.arrayBuffer();
+      const tileLayer = new VectorTile(new Pbf(buffer)).layers[layerData.layer_id];
+      geomType = tileLayer
+        ? tileLayer.feature(0).toGeoJSON(0, 0, 0).geometry.type
+        : 'ST_MultiPolygon';
+    }
 
     function createLayer(extraFields) {
-      let map = options.map;
+      const map = options.map;
       map.addSource(layerData.layer_id, {
         type: 'vector',
         promoteId: 'ogc_fid',
-        tiles: [location.origin + value + '?geom=wkb_geometry&fields=ogc_fid' + extraFields],
+        tiles: [tilesURL + extraFields],
       });
       map.addLayer({
         id: layerData.layer_id,
         source: layerData.layer_id,
         'source-layer': layerData.layer_id,
-        ...getLayerStyling(layerData.layer_geom_type),
+        ...getLayerStyling(geomType),
       });
-      let visibility = firstAdded ? 'visible' : 'none';
+      const visibility = firstAdded ? 'visible' : 'none';
       map.setLayoutProperty(layerData.layer_id, 'visibility', visibility);
 
       let featureId;
@@ -221,16 +243,16 @@
       if (firstAdded) options.map.fitBounds(bounds, { animate: false });
     }
 
-    var promise = null;
-    var layer_fields = layerData.layer_fields;
+    const promise = null;
+    const layer_fields = layerData.layer_fields;
     if (layer_fields && layer_fields.length > 0) {
       // New way in which the fields are stored in 'shape_info' in CKAN
 
-      var extraFields = '';
-      for (var i = 0; i < layer_fields.length; i++) {
-        var field = layer_fields[i];
+      let extraFields = '';
+      for (let i = 0; i < layer_fields.length; i++) {
+        const field = layer_fields[i];
         if (field.field_name !== 'ogc_fid' && ALLOWED_COLUMN_TYPES.indexOf(field.data_type) >= 0) {
-          var escaped_field_name = encodeURIComponent(field.field_name);
+          const escaped_field_name = encodeURIComponent(field.field_name);
           extraFields += ',"' + escaped_field_name + '"';
         }
       }
@@ -238,20 +260,23 @@
     } else {
       // Still supporting the old way for backwards compatibility - fetching fields from spatial server
 
-      var fieldsInfo = value.substr(0, value.indexOf('/wkb_geometry/vector-tiles/{z}/{x}/{y}.pbf'));
-      var splitString = '/postgis/';
-      var splitPosition = fieldsInfo.indexOf(splitString);
+      const fieldsInfo = value.substr(
+        0,
+        value.indexOf('/wkb_geometry/vector-tiles/{z}/{x}/{y}.pbf')
+      );
+      const splitString = '/postgis/';
+      const splitPosition = fieldsInfo.indexOf(splitString);
       fieldsInfo =
         fieldsInfo.substr(0, splitPosition) +
         '/tables/' +
         fieldsInfo.substr(splitPosition + splitString.length);
 
       promise = $.getJSON(fieldsInfo + '?format=geojson', function (data) {
-        var extraFields = '';
+        const extraFields = '';
         if (data.columns) {
-          for (var i = 0; i < data.columns.length; i++) {
-            var column = data.columns[i];
-            var escaped_column_name = encodeURIComponent(column.column_name);
+          for (const i = 0; i < data.columns.length; i++) {
+            const column = data.columns[i];
+            const escaped_column_name = encodeURIComponent(column.column_name);
             if (
               column.column_name !== 'ogc_fid' &&
               ALLOWED_COLUMN_TYPES.indexOf(column.data_type) >= 0
@@ -267,24 +292,24 @@
     return promise;
   }
 
-  function getData(options) {
+  async function getData(options) {
     //call DataProxy to get data for resource
 
     /**
      * List of shape info for each geopreviewable resource
      * @type {[{resource_name: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
      */
-    var data = JSON.parse($('#shapeData').text());
-    var layers = [];
+    const data = JSON.parse($('#shapeData').text());
+    const layers = [];
 
     info = new InfoControl();
     options.map.addControl(info, 'top-left');
     info.update();
 
-    var promises = [];
-    var firstAdded = true;
-    for (var idx = 0; idx < data.length; idx++) {
-      var promise = getFieldListAndBuildLayer(
+    const promises = [];
+    let firstAdded = true;
+    for (let idx = 0; idx < data.length; idx++) {
+      const promise = await getFieldListAndBuildLayer(
         data[idx],
         info,
         firstAdded,
@@ -300,7 +325,7 @@
 
     $.when.apply($, promises).done(() => {
       layerConfig = {};
-      for (let row of data) {
+      for (const row of data) {
         layerConfig[row.resource_name] = [row.layer_id, getBounds(row.bounding_box)];
       }
       options.map.addControl(new LayersControl(layerConfig), 'top-right');
@@ -312,7 +337,7 @@
   }
 
   function initMap() {
-    let map = options.map;
+    const map = options.map;
     map.addControl(new maplibregl.AttributionControl({}), 'top-right');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     map.scrollZoom.disable();

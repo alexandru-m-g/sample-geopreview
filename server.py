@@ -1,21 +1,34 @@
 import http.server
 import urllib.request
-from urllib.parse import urlparse
 from socketserver import ThreadingMixIn
+from urllib.parse import urlparse
 
 PORT = 9000
 BASE_TILES_PROXY_PATH = "/mapbox-base-tiles/"
 VECTOR_TILES_PROXY_PATH = "/gis/"
 TARGET_SERVER = "data.humdata.org"
 
+LAYER_TYPE_PROXY_PATH = "/gis/layer-type/"
+LAYER_TYPE_TARGET_SERVER = "feature.data-humdata-org.ahconu.org"
+
+
 class ThreadingSimpleServer(ThreadingMixIn, http.server.HTTPServer):
     pass
 
+
 class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        if self.path.startswith(BASE_TILES_PROXY_PATH) or self.path.startswith(VECTOR_TILES_PROXY_PATH):
+        if self.path.startswith(LAYER_TYPE_PROXY_PATH):
             url = urlparse(self.path)
-            proxy_url = url._replace(netloc=TARGET_SERVER, scheme='https').geturl()
+            proxy_url = url._replace(
+                netloc=LAYER_TYPE_TARGET_SERVER, scheme="https"
+            ).geturl()
+            self.handle_proxy_request(proxy_url)
+        elif self.path.startswith(BASE_TILES_PROXY_PATH) or self.path.startswith(
+            VECTOR_TILES_PROXY_PATH
+        ):
+            url = urlparse(self.path)
+            proxy_url = url._replace(netloc=TARGET_SERVER, scheme="https").geturl()
             self.handle_proxy_request(proxy_url)
         else:
             super().do_GET()
@@ -29,7 +42,10 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.copyfile(response, self.wfile)
         except Exception as e:
-            self.send_error(500, f"Error fetching proxy URL: {proxy_url}. Error: {str(e)}")
+            self.send_error(
+                500, f"Error fetching proxy URL: {proxy_url}. Error: {str(e)}"
+            )
+
 
 Handler = ProxyHTTPRequestHandler
 
