@@ -272,9 +272,9 @@
         fieldsInfo.substr(splitPosition + splitString.length);
 
       promise = $.getJSON(fieldsInfo + '?format=geojson', function (data) {
-        const extraFields = '';
+        let extraFields = '';
         if (data.columns) {
-          for (const i = 0; i < data.columns.length; i++) {
+          for (let i = 0; i < data.columns.length; i++) {
             const column = data.columns[i];
             const escaped_column_name = encodeURIComponent(column.column_name);
             if (
