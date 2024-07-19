@@ -1,5 +1,5 @@
 (function () {
-  const ALLOWED_COLUMN_TYPES = ['character constying', 'integer', 'numeric'];
+  const ALLOWED_COLUMN_TYPES = ['character varying', 'integer', 'numeric'];
   const NOT_ALLOWED_PROPERTIES = ['ogc_fid', '__geometryDimension', 'srid'];
 
   let info;
