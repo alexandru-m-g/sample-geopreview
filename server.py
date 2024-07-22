@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 PORT = 9000
 BASE_TILES_PROXY_PATH = "/mapbox-base-tiles/"
+MAPBOX_PROXY_PATH = "/mapbox/"
 VECTOR_TILES_PROXY_PATH = "/gis/"
 TARGET_SERVER = "data.humdata.org"
 
@@ -24,8 +25,10 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 netloc=LAYER_TYPE_TARGET_SERVER, scheme="https"
             ).geturl()
             self.handle_proxy_request(proxy_url)
-        elif self.path.startswith(BASE_TILES_PROXY_PATH) or self.path.startswith(
-            VECTOR_TILES_PROXY_PATH
+        elif (
+            self.path.startswith(BASE_TILES_PROXY_PATH)
+            or self.path.startswith(MAPBOX_PROXY_PATH)
+            or self.path.startswith(VECTOR_TILES_PROXY_PATH)
         ):
             url = urlparse(self.path)
             proxy_url = url._replace(netloc=TARGET_SERVER, scheme="https").geturl()

@@ -299,7 +299,7 @@
      * List of shape info for each geopreviewable resource
      * @type {[{resource_name: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
      */
-    const data = JSON.parse($('#shapeData').text());
+    const data = options.data;
     const layers = [];
 
     info = new InfoControl();
@@ -344,31 +344,79 @@
     map.dragRotate.disable();
     map.keyboard.disable();
     map.touchZoomRotate.disableRotation();
-    map.addSource('baselayer', {
-      type: 'raster',
-      attribution: '<a href="http://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>',
-      tiles: [$('#mapbox-baselayer-url-div').text()],
-      minzoom: 0,
-      maxzoom: 12,
-      tileSize: 256,
-    });
-    map.addLayer({
-      id: 'baselayer',
-      source: 'baselayer',
-      type: 'raster',
-    });
     getData(options);
   }
 
+  function isMapboxURL(r) {
+    return 0 === r.indexOf('mapbox:');
+  }
+  function transformMapboxUrl(r, t, o) {
+    return r.indexOf('/styles/') > -1 && -1 === r.indexOf('/sprite')
+      ? { url: normalizeStyleURL(r, o) }
+      : r.indexOf('/sprites/') > -1
+      ? { url: normalizeSpriteURL(r, o) }
+      : r.indexOf('/fonts/') > -1
+      ? { url: normalizeGlyphsURL(r, o) }
+      : r.indexOf('/v4/') > -1 || 'Source' === t
+      ? { url: normalizeSourceURL(r, o) }
+      : void 0;
+  }
+  function parseUrl(r) {
+    const t = r.match(/^(\w+):\/\/([^/?]*)(\/[^?]+)?\??(.+)?/);
+    if (!t) throw new Error('Unable to parse URL object');
+    return {
+      protocol: t[1],
+      authority: t[2],
+      path: t[3] || '/',
+      params: t[4] ? t[4].split('&') : [],
+    };
+  }
+  function formatUrl(r, t) {
+    const o = parseUrl('https://api.mapbox.com');
+    (r.protocol = o.protocol), (r.authority = o.authority), r.params.push(`access_token=${t}`);
+    const n = r.params.length ? `?${r.params.join('&')}` : '';
+    return `${r.protocol}://${r.authority}${r.path}${n}`;
+  }
+  function normalizeStyleURL(r, t) {
+    const o = parseUrl(r);
+    return (o.path = `/styles/v1${o.path}`), formatUrl(o, t);
+  }
+  function normalizeGlyphsURL(r, t) {
+    const o = parseUrl(r);
+    return (o.path = `/fonts/v1${o.path}`), formatUrl(o, t);
+  }
+  function normalizeSourceURL(r, t) {
+    const o = parseUrl(r);
+    return (o.path = `/v4/${o.authority}.json`), o.params.push('secure'), formatUrl(o, t);
+  }
+  function normalizeSpriteURL(r, t) {
+    const o = parseUrl(r);
+    let n = o.path.split('.'),
+      e = n[0];
+    const a = n[1];
+    let s = '';
+    return (
+      e.indexOf('@2x') && ((e = e.split('@2x')[0]), (s = '@2x')),
+      (o.path = `/styles/v1${e}/sprite${s}.${a}`),
+      formatUrl(o, t)
+    );
+  }
+
   function buildMap(options) {
+    const mapboxKey =
+      'pk.eyJ1IjoiaHVtZGF0YSIsImEiOiJja2FvMW1wbDIwMzE2MnFwMW9teHQxOXhpIn0.Uri8IURftz3Jv5It51ISAA';
+    function transformRequest(url, resourceType) {
+      if (isMapboxURL(url)) return transformMapboxUrl(url, resourceType, mapboxKey);
+      return { url };
+    }
+
+    options.data = JSON.parse($('#shapeData').text());
     options.map = new maplibregl.Map({
       container: 'map',
       attributionControl: false,
-      style: {
-        version: 8,
-        sources: {},
-        layers: [],
-      },
+      style: '/mapbox/styles/v1/humdata/cl3lpk27k001k15msafr9714b?access_token=cacheToken',
+      transformRequest,
+      bounds: getBounds(options.data[0].bounding_box),
     });
     options.map.once('load', initMap);
   }
