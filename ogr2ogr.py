@@ -15,21 +15,22 @@ def ogrinfo(file: Path):
 
 def ogr2ogr(layers: list, dest: Path, src: Path):
     name = dest.name.replace(".", "_")
-    (outputs / name).mkdir(parents=True, exist_ok=True)
     for layer in layers:
-        run(
-            [
-                "ogr2ogr",
-                "-overwrite",
-                "-makevalid",
-                *["-dim", "XY"],
-                *["-t_srs", "EPSG:4326"],
-                *["-nlt", "PROMOTE_TO_MULTI"],
-                *["-nln", layer["name"]],
-                outputs / name / f"{layer["name"]}.gpkg",
-                *[src, layer["name"]],
-            ]
-        )
+        if layer["featureCount"] > 0:
+            (outputs / name).mkdir(parents=True, exist_ok=True)
+            run(
+                [
+                    "ogr2ogr",
+                    "-overwrite",
+                    "-makevalid",
+                    *["-dim", "XY"],
+                    *["-t_srs", "EPSG:4326"],
+                    *["-nlt", "PROMOTE_TO_MULTI"],
+                    *["-nln", layer["name"]],
+                    outputs / name / f"{layer["name"]}.gpkg",
+                    *[src, layer["name"]],
+                ]
+            )
 
 
 def unzip(file: Path, dest: Path):
