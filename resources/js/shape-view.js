@@ -49,6 +49,11 @@
     },
   };
 
+  let vectorTileBaseMapConfig = {
+    baseMapUrl: null,
+    token: null,
+  }
+
   class InfoControl {
     onAdd(map) {
       this._map = map;
@@ -142,6 +147,26 @@
       this._container.parentNode.removeChild(this._container);
       this._map = undefined;
     }
+  }
+
+
+  function setVectorTileBaseMapConfig() {
+    let baseMapUrl = null;
+    let token = null;
+    let urlObj = null;
+    try {
+      const config = JSON.parse($('#mapbox-baselayer-url-div').text());
+      baseMapUrl = config.baseMapUrl;
+      token = config.token;
+      urlObj = new URL(baseMapUrl);
+    }
+    catch (e) {
+      baseMapUrl = baseMapUrl || '/mapbox';
+      token = token || 'cacheToken';
+      urlObj = new URL(baseMapUrl, window.location.href);
+    }
+    vectorTileBaseMapConfig.baseMapUrl = urlObj.href;
+    vectorTileBaseMapConfig.token = token;
   }
 
   function getLayerStyling(geomType) {
@@ -372,8 +397,9 @@
     };
   }
   function formatUrl(r, t) {
-    const o = parseUrl('https://api.mapbox.com');
-    (r.protocol = o.protocol), (r.authority = o.authority), r.params.push(`access_token=${t}`);
+    const o = parseUrl(vectorTileBaseMapConfig.baseMapUrl);
+    (r.protocol = o.protocol), (r.authority = o.authority),
+      (r.path = o.path + r.path), r.params.push(`access_token=${t}`);
     const n = r.params.length ? `?${r.params.join('&')}` : '';
     return `${r.protocol}://${r.authority}${r.path}${n}`;
   }
@@ -401,12 +427,22 @@
       formatUrl(o, t)
     );
   }
+  function normalizeTiles(r, t) {
+    const o = parseUrl(r);
+    for (let i = 0; i < o.params.length; i++) {
+      const key = o.params[i].split('=');
+      if ('access_token' === key[0]) {
+        o.params.splice(i, 1); // remove item from params
+        break;
+      }
+    }
+    return formatUrl(o, t);
+  }
 
   function buildMap(options) {
-    const mapboxKey =
-      'pk.eyJ1IjoiaHVtZGF0YSIsImEiOiJja2FvMW1wbDIwMzE2MnFwMW9teHQxOXhpIn0.Uri8IURftz3Jv5It51ISAA';
     function transformRequest(url, resourceType) {
-      if (isMapboxURL(url)) return transformMapboxUrl(url, resourceType, mapboxKey);
+      if (isMapboxURL(url)) return transformMapboxUrl(url, resourceType, vectorTileBaseMapConfig.token);
+      if (url.indexOf('tiles.mapbox') > 0) return {url: normalizeTiles(url, vectorTileBaseMapConfig.token)};
       return { url };
     }
 
@@ -422,6 +458,7 @@
   }
 
   $(document).ready(function () {
+    setVectorTileBaseMapConfig();
     buildMap(options);
   });
 })();
