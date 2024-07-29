@@ -340,66 +340,66 @@
     const map = options.map;
     map.addControl(new maplibregl.AttributionControl({}), 'top-right');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
-    map.scrollZoom.disable();
     map.dragRotate.disable();
     map.keyboard.disable();
     map.touchZoomRotate.disableRotation();
     getData(options);
   }
 
-  function isMapboxURL(r) {
-    return 0 === r.indexOf('mapbox:');
+  function isMapboxURL(url) {
+    return url.indexOf('mapbox:') === 0;
   }
-  function transformMapboxUrl(r, t, o) {
-    return r.indexOf('/styles/') > -1 && -1 === r.indexOf('/sprite')
-      ? { url: normalizeStyleURL(r, o) }
-      : r.indexOf('/sprites/') > -1
-      ? { url: normalizeSpriteURL(r, o) }
-      : r.indexOf('/fonts/') > -1
-      ? { url: normalizeGlyphsURL(r, o) }
-      : r.indexOf('/v4/') > -1 || 'Source' === t
-      ? { url: normalizeSourceURL(r, o) }
-      : void 0;
+  function transformMapboxUrl(url, resourceType, accessToken) {
+    if (url.indexOf('/styles/') > -1 && url.indexOf('/sprite') === -1)
+      return { url: normalizeStyleURL(url, accessToken) };
+    if (url.indexOf('/sprites/') > -1)
+      return { url: normalizeSpriteURL(url, '', '.json', accessToken) };
+    if (url.indexOf('/fonts/') > -1) return { url: normalizeGlyphsURL(url, accessToken) };
+    if (url.indexOf('/v4/') > -1) return { url: normalizeSourceURL(url, accessToken) };
+    if (resourceType === 'Source') return { url: normalizeSourceURL(url, accessToken) };
   }
-  function parseUrl(r) {
-    const t = r.match(/^(\w+):\/\/([^/?]*)(\/[^?]+)?\??(.+)?/);
-    if (!t) throw new Error('Unable to parse URL object');
+  function parseUrl(url) {
+    const urlRe = /^(\w+):\/\/([^/?]*)(\/[^?]+)?\??(.+)?/;
+    const parts = url.match(urlRe);
+    if (!parts) {
+      throw new Error('Unable to parse URL object');
+    }
     return {
-      protocol: t[1],
-      authority: t[2],
-      path: t[3] || '/',
-      params: t[4] ? t[4].split('&') : [],
+      protocol: parts[1],
+      authority: parts[2],
+      path: parts[3] || '/',
+      params: parts[4] ? parts[4].split('&') : [],
     };
   }
-  function formatUrl(r, t) {
-    const o = parseUrl('https://api.mapbox.com');
-    (r.protocol = o.protocol), (r.authority = o.authority), r.params.push(`access_token=${t}`);
-    const n = r.params.length ? `?${r.params.join('&')}` : '';
-    return `${r.protocol}://${r.authority}${r.path}${n}`;
+  function formatUrl(urlObject, accessToken) {
+    const apiUrlObject = parseUrl('https://api.mapbox.com');
+    urlObject.protocol = apiUrlObject.protocol;
+    urlObject.authority = apiUrlObject.authority;
+    urlObject.params.push(`access_token=${accessToken}`);
+    const params = urlObject.params.length ? `?${urlObject.params.join('&')}` : '';
+    return `${urlObject.protocol}://${urlObject.authority}${urlObject.path}${params}`;
   }
-  function normalizeStyleURL(r, t) {
-    const o = parseUrl(r);
-    return (o.path = `/styles/v1${o.path}`), formatUrl(o, t);
+  function normalizeStyleURL(url, accessToken) {
+    const urlObject = parseUrl(url);
+    urlObject.path = `/styles/v1${urlObject.path}`;
+    return formatUrl(urlObject, accessToken);
   }
-  function normalizeGlyphsURL(r, t) {
-    const o = parseUrl(r);
-    return (o.path = `/fonts/v1${o.path}`), formatUrl(o, t);
+  function normalizeGlyphsURL(url, accessToken) {
+    const urlObject = parseUrl(url);
+    urlObject.path = `/fonts/v1${urlObject.path}`;
+    return formatUrl(urlObject, accessToken);
   }
-  function normalizeSourceURL(r, t) {
-    const o = parseUrl(r);
-    return (o.path = `/v4/${o.authority}.json`), o.params.push('secure'), formatUrl(o, t);
+  function normalizeSourceURL(url, accessToken) {
+    const urlObject = parseUrl(url);
+    urlObject.path = `/v4/${urlObject.authority}.json`;
+    urlObject.params.push('secure');
+    return formatUrl(urlObject, accessToken);
   }
-  function normalizeSpriteURL(r, t) {
-    const o = parseUrl(r);
-    let n = o.path.split('.'),
-      e = n[0];
-    const a = n[1];
-    let s = '';
-    return (
-      e.indexOf('@2x') && ((e = e.split('@2x')[0]), (s = '@2x')),
-      (o.path = `/styles/v1${e}/sprite${s}.${a}`),
-      formatUrl(o, t)
-    );
+  function normalizeSpriteURL(url, format, extension, accessToken) {
+    const urlObject = parseUrl(url);
+    const path = urlObject.path.split('.');
+    urlObject.path = `/styles/v1${path[0]}/sprite.${path[1]}`;
+    return formatUrl(urlObject, accessToken);
   }
 
   function buildMap(options) {
@@ -414,6 +414,7 @@
     options.map = new maplibregl.Map({
       container: 'map',
       attributionControl: false,
+      cooperativeGestures: true,
       style: '/mapbox/styles/v1/humdata/cl3lpk27k001k15msafr9714b?access_token=cacheToken',
       transformRequest,
       bounds: getBounds(options.data[0].bounding_box),
