@@ -57,6 +57,9 @@
     serverUrl: null,
   };
 
+  /**
+   * Class implementing the information panel that appears when hovering over the layer
+   */
   class InfoControl {
     onAdd(map) {
       this._map = map;
@@ -88,13 +91,16 @@
         '<h4>' +
         'Shape info' +
         '</h4>' +
-        (props ? '<table>' + innerData + '</table>' : 'Click on a shape');
+        (props ? '<table>' + innerData + '</table>' : 'Hover over a shape');
     }
     showOtherMessage(message) {
       this._container.innerHTML = message;
     }
   }
 
+  /**
+   * Class implementing layers control to allow toggling the visibility of the layers
+   */
   class LayersControl {
     constructor(ctrls) {
       this._container = document.createElement('div');
@@ -169,6 +175,9 @@
   }
 
 
+  /**
+   * Determine vector tile base map config (base map URL and token) from hidden <div>
+   */
   function setVectorTileBaseMapConfig() {
     let baseMapUrl = null;
     let token = null;
@@ -214,10 +223,24 @@
     return bounds;
   }
 
+  /**
+   * Compute full URL for HDX vector tiles
+   * @param {string} url
+   * @returns {string}
+   */
+  function computeHDXVectorTilesUrl(url) {
+    let tilesBaseUrl = url;
+    if (url.startsWith('//')) {
+      tilesBaseUrl = vectorTileHDXLayerConfig.serverUrl.startsWith('https://') ? 'https:' + url : 'http:' + url;
+    }
+    else if (!url.startsWith('https://') && !url.startsWith('http://')) {
+      tilesBaseUrl = vectorTileHDXLayerConfig.serverUrl + url;
+    }
+    return tilesBaseUrl + '?geom=wkb_geometry&fields=ogc_fid';
+  }
+
   async function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
-    const value = layerData.url;
-    const tilesBaseUrl = value.indexOf('://') > 0 ? value : vectorTileHDXLayerConfig.serverUrl + value;
-    const tilesURL = tilesBaseUrl + '?geom=wkb_geometry&fields=ogc_fid';
+    const tilesURL = computeHDXVectorTilesUrl(layerData.url);
     const bounds = getBounds(layerData.bounding_box);
     const res = await fetch(`${vectorTileHDXLayerConfig.serverUrl}/gis/layer-type/${layerData.layer_id}`);
     let geomType;
@@ -234,6 +257,10 @@
         : 'ST_MultiPolygon';
     }
 
+    /**
+     * Create a layer with the given extra fields
+     * @param {string} extraFields - extra fields given as URL params string to be added to the URL requesting PBFs
+     */
     function createLayer(extraFields) {
       const map = options.map;
       map.addSource(layerData.layer_id, {
@@ -302,43 +329,11 @@
         }
       }
       createLayer(extraFields);
-    } else {
-      // Still supporting the old way for backwards compatibility - fetching fields from spatial server
-
-      let fieldsInfo = value.substr(
-        0,
-        value.indexOf('/wkb_geometry/vector-tiles/{z}/{x}/{y}.pbf')
-      );
-      const splitString = '/postgis/';
-      const splitPosition = fieldsInfo.indexOf(splitString);
-      fieldsInfo =
-        fieldsInfo.substr(0, splitPosition) +
-        '/tables/' +
-        fieldsInfo.substr(splitPosition + splitString.length);
-
-      promise = $.getJSON(fieldsInfo + '?format=geojson', function (data) {
-        let extraFields = '';
-        if (data.columns) {
-          for (let i = 0; i < data.columns.length; i++) {
-            const column = data.columns[i];
-            const escaped_column_name = encodeURIComponent(column.column_name);
-            if (
-              column.column_name !== 'ogc_fid' &&
-              ALLOWED_COLUMN_TYPES.indexOf(column.data_type) >= 0
-            ) {
-              extraFields += ',"' + escaped_column_name + '"';
-            }
-          }
-        }
-
-        createLayer(extraFields);
-      });
     }
     return promise;
   }
 
   async function getData(options) {
-    //call DataProxy to get data for resource
 
     /**
      * List of shape info for each geopreviewable resource
@@ -381,9 +376,17 @@
     });
   }
 
+  /**
+   * Function that runs when the map is being initialized by MapLibre
+   */
   function initMap() {
     const map = options.map;
-    map.addControl(new maplibregl.AttributionControl({}), 'top-right');
+    const customAttributionConfig = {
+      compact: true,
+      customAttribution: '<a href="https://www.maplibre.org/" target="_blank">MapLibre</a>' +
+        ' | <a href="https://www.mapbox.com/about/maps/" target="_blank">Mapbox</a>'
+    };
+    map.addControl(new maplibregl.AttributionControl(customAttributionConfig), 'top-right');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
     map.scrollZoom.disable();
     map.dragRotate.disable();
@@ -460,6 +463,13 @@
   }
 
   function buildMap(options) {
+
+    /**
+     * Transform requests URLs
+     * @param {string} url
+     * @param {string} resourceType
+     * @returns {{url: string}}
+     */
     function transformRequest(url, resourceType) {
       if (isMapboxURL(url)) return transformMapboxUrl(url, resourceType, vectorTileBaseMapConfig.token);
       if (url.indexOf('tiles.mapbox') > 0) return {url: normalizeTiles(url, vectorTileBaseMapConfig.token)};
@@ -478,7 +488,7 @@
     options.map.once('load', initMap);
   }
 
-  $(document).ready(function () {
+  $(function () {
     setVectorTileBaseMapConfig();
     buildMap(options);
   });
