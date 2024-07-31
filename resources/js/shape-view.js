@@ -52,7 +52,10 @@
   let vectorTileBaseMapConfig = {
     baseMapUrl: null,
     token: null,
-  }
+  };
+  let vectorTileHDXLayerConfig = {
+    serverUrl: null,
+  };
 
   class InfoControl {
     onAdd(map) {
@@ -149,6 +152,22 @@
     }
   }
 
+  /**
+   * Determine HDX vector tile server config (especially base/origin URL) from vector tile layer URL
+   * @param {string} layerUrl
+   */
+  function setVectorTileHDXLayerConfig(layerUrl) {
+    let hdxVectorTileServerUrl = null;
+    try {
+      const urlObj = new URL(layerUrl);
+      hdxVectorTileServerUrl = urlObj.origin;
+    }
+    catch (e) {
+      hdxVectorTileServerUrl= window.location.origin;
+    }
+    vectorTileHDXLayerConfig.serverUrl= hdxVectorTileServerUrl;
+  }
+
 
   function setVectorTileBaseMapConfig() {
     let baseMapUrl = null;
@@ -197,9 +216,10 @@
 
   async function getFieldListAndBuildLayer(layerData, info, firstAdded, options, layers) {
     const value = layerData.url;
-    const tilesURL = location.origin + value + '?geom=wkb_geometry&fields=ogc_fid';
+    const tilesBaseUrl = value.indexOf('://') > 0 ? value : vectorTileHDXLayerConfig.serverUrl + value;
+    const tilesURL = tilesBaseUrl + '?geom=wkb_geometry&fields=ogc_fid';
     const bounds = getBounds(layerData.bounding_box);
-    const res = await fetch(`/gis/layer-type/${layerData.layer_id}`);
+    const res = await fetch(`${vectorTileHDXLayerConfig.serverUrl}/gis/layer-type/${layerData.layer_id}`);
     let geomType;
     if (res.ok) {
       const resJSON = await res.json();
@@ -209,8 +229,8 @@
       const r = await fetch(tile0);
       const buffer = await r.arrayBuffer();
       const tileLayer = new VectorTile(new Pbf(buffer)).layers[layerData.layer_id];
-      geomType = tileLayer
-        ? tileLayer.feature(0).toGeoJSON(0, 0, 0).geometry.type
+      geomType = tileLayer ?
+        tileLayer.feature(0).toGeoJSON(0, 0, 0).geometry.type
         : 'ST_MultiPolygon';
     }
 
@@ -268,7 +288,7 @@
       if (firstAdded) options.map.fitBounds(bounds, { animate: false });
     }
 
-    const promise = null;
+    let promise = null;
     const layer_fields = layerData.layer_fields;
     if (layer_fields && layer_fields.length > 0) {
       // New way in which the fields are stored in 'shape_info' in CKAN
@@ -285,7 +305,7 @@
     } else {
       // Still supporting the old way for backwards compatibility - fetching fields from spatial server
 
-      const fieldsInfo = value.substr(
+      let fieldsInfo = value.substr(
         0,
         value.indexOf('/wkb_geometry/vector-tiles/{z}/{x}/{y}.pbf')
       );
@@ -447,10 +467,11 @@
     }
 
     options.data = JSON.parse($('#shapeData').text());
+    setVectorTileHDXLayerConfig(options.data[0].url);
     options.map = new maplibregl.Map({
       container: 'map',
       attributionControl: false,
-      style: '/mapbox/styles/v1/humdata/cl3lpk27k001k15msafr9714b?access_token=cacheToken',
+      style: 'mapbox://styles/humdata/cl3lpk27k001k15msafr9714b',
       transformRequest,
       bounds: getBounds(options.data[0].bounding_box),
     });
