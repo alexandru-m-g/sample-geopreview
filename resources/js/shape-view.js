@@ -337,10 +337,9 @@
 
     /**
      * List of shape info for each geopreviewable resource
-     * @type {[{resource_name: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
+     * @type {[{resource_name: string, resource_format: string, url: string, bounding_box: string, layer_fields: Array, layer_id: string}]}
      */
     const data = options.data;
-    const layers = [];
 
     info = new InfoControl();
     options.map.addControl(info, 'top-left');
@@ -348,14 +347,18 @@
 
     const promises = [];
     let firstAdded = true;
+
+    const duplicateLayerNames = {};
+    /* Check for duplicate layer names */
+    for (let idx = 0; idx < data.length; idx++) {
+      duplicateLayerNames[data[idx].resource_name] = ( duplicateLayerNames[data[idx].resource_name] || 0 ) + 1;
+    }
     for (let idx = 0; idx < data.length; idx++) {
       const promise = await getFieldListAndBuildLayer(
         data[idx],
         info,
         firstAdded,
         options,
-        layers,
-        data[idx].resource_name
       );
       if (firstAdded) {
         firstAdded = false;
@@ -364,14 +367,17 @@
     }
 
     $.when.apply($, promises).done(() => {
-      layerConfig = {};
+      const layerConfig = {};
       for (const row of data) {
-        layerConfig[row.resource_name] = [row.layer_id, getBounds(row.bounding_box)];
+        const resourceName = row.resource_name;
+        const layerName = duplicateLayerNames[resourceName] === 1 ?
+          resourceName :  resourceName + `-${row.resource_format || duplicateLayerNames[resourceName]}`;
+        layerConfig[layerName] = [row.layer_id, getBounds(row.bounding_box)];
       }
       options.map.addControl(new LayersControl(layerConfig), 'top-right');
     });
 
-    $('.map-info').mousedown(function (event) {
+    $('.map-info').on('mousedown',function (event) {
       event.stopPropagation();
     });
   }
@@ -394,9 +400,9 @@
     getData(options);
   }
 
-  /** 
-   * Based on https://github.com/rowanwins/maplibregl-mapbox-request-transformer/blob/ac86b25afa1028192ae2dc2500714ce864bbe443/src/index.js 
-   * 
+  /**
+   * Based on https://github.com/rowanwins/maplibregl-mapbox-request-transformer/blob/ac86b25afa1028192ae2dc2500714ce864bbe443/src/index.js
+   *
    * Adapted to work with HDX configuration and servers
    */
   function isMapboxURL(url) {
