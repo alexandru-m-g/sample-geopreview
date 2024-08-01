@@ -394,6 +394,11 @@
     getData(options);
   }
 
+  /** 
+   * Based on https://github.com/rowanwins/maplibregl-mapbox-request-transformer/blob/ac86b25afa1028192ae2dc2500714ce864bbe443/src/index.js 
+   * 
+   * Adapted to work with HDX configuration and servers
+   */
   function isMapboxURL(url) {
     return url.indexOf('mapbox:') === 0;
   }
@@ -420,6 +425,7 @@
     };
   }
 
+  /* Modified by HDX to use HDX config */
   function formatUrl(urlObject, accessToken) {
     const apiUrlObject = parseUrl(vectorTileBaseMapConfig.baseMapUrl);
     urlObject.protocol = apiUrlObject.protocol;
@@ -429,6 +435,8 @@
     const params = urlObject.params.length ? `?${urlObject.params.join('&')}` : '';
     return `${urlObject.protocol}://${urlObject.authority}${urlObject.path}${params}`;
   }
+  /* END - Modified by HDX */
+
   function normalizeStyleURL(url, accessToken) {
     const urlObject = parseUrl(url);
     urlObject.path = `/styles/v1${urlObject.path}`;
@@ -451,17 +459,23 @@
     urlObject.path = `/styles/v1${path[0]}/sprite.${path[1]}`;
     return formatUrl(urlObject, accessToken);
   }
-  function normalizeTiles(r, t) {
-    const o = parseUrl(r);
-    for (let i = 0; i < o.params.length; i++) {
-      const key = o.params[i].split('=');
+
+  /* Added by HDX to transform vector tiles URL */
+  function normalizeTiles(url, accessToken) {
+    const urlObject = parseUrl(url);
+    for (let i = 0; i < urlObject.params.length; i++) {
+      const key = urlObject.params[i].split('=');
       if ('access_token' === key[0]) {
-        o.params.splice(i, 1); // remove item from params
+        /*remove token param as it will be added later*/
+        urlObject.params.splice(i, 1);
         break;
       }
     }
-    return formatUrl(o, t);
+    return formatUrl(urlObject, accessToken);
   }
+  /* END - added by HDX */
+
+  /* END - based on https://github.com/rowanwins/maplibregl-mapbox-request-transformer/blob/ac86b25afa1028192ae2dc2500714ce864bbe443/src/index.js */
 
   function buildMap(options) {
 
